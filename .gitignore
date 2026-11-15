@@ -1,0 +1,10 @@
+.aws
+.azure
+.copilot
+.cache
+.dotnet
+.docker
+.landscape
+.local
+.vscode-remote-containers
+.vscode-server
