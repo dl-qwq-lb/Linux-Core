@@ -1,0 +1,5 @@
+*.o
+/init
+initramfs.cpio.gz
+rootfs
+busybox-1_5_stable/

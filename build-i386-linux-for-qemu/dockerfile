@@ -1,0 +1,125 @@
+# 使用 Ubuntu 16.04 基础镜像
+FROM ubuntu:16.04
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TERM=xterm
+
+ARG USERNAME=user
+ARG PASSWORD=user
+ARG USER_UID=1000
+
+# 备份原始源列表
+RUN cp /etc/apt/sources.list /etc/apt/sources.list.bak
+
+# 替换为阿里云Ubuntu 18.04镜像源
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+
+RUN echo "deb http://old-releases.ubuntu.com/ubuntu/ lucid main restricted universe multiverse" | tee /etc/apt/sources.list.d/lucid.list
+
+# 更新包列表并安装基础工具
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo \
+    ca-certificates \
+    wget \
+    curl \
+    software-properties-common
+
+# 添加Ubuntu工具链测试PPA以获取gcc-4.1
+# 安装gcc-4.4和相关多库支持
+RUN apt-get install -y \
+    gcc-4.1 \
+    gcc-4.1-multilib \
+    g++-4.1 \
+    g++-4.1-multilib \
+    build-essential
+
+
+# 从源码编译安装 Make 3.81
+RUN cd /tmp && \
+    wget https://mirrors.tuna.tsinghua.edu.cn/gnu/make/make-3.81.tar.gz && \
+    tar -xzf make-3.81.tar.gz && \
+    cd make-3.81 && \
+    ./configure --prefix=/usr && \
+    make && \
+    make install && \
+    cd /tmp && \
+    rm -rf make-3.81*
+
+# 从源码编译安装兼容的 binutils 2.18
+RUN cd /tmp && \
+    wget https://mirrors.tuna.tsinghua.edu.cn/gnu/binutils/binutils-2.18.tar.bz2 && \
+    tar -xf binutils-2.18.tar.bz2 && \
+    cd binutils-2.18 && \
+    ./configure --prefix=/opt/binutils-2.18 \
+                --disable-werror \
+                --enable-ld=yes \
+                --enable-gold=no && \
+    make -j8 && \
+    make install && \
+    cd /tmp && \
+    rm -rf binutils-2.18*
+
+# 安装内核编译依赖（32 位版本）
+RUN apt-get install -y --no-install-recommends \
+    libncurses5-dev \
+    libssl-dev \
+    libelf-dev \
+    bc \
+    flex \
+    bison \
+    pkg-config \
+    git \
+    file \
+    kmod \
+    rsync \
+    cpio
+
+# 安装 QEMU 和虚拟化工具
+RUN apt-get install -y --no-install-recommends \
+    qemu-system-x86 \
+    qemu-system-i386 \
+    qemu-utils \
+    bridge-utils \
+    net-tools \
+    iputils-ping
+
+
+# # 设置 GCC 4.9 为默认编译器
+# RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.4 100 && \
+#     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.4 100 && \
+#     update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-4.4 100 && \
+#     update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-4.4 100
+
+# 清理缓存以减小镜像大小
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# 创建用户，设置UID，并添加到sudo组
+RUN useradd -m -s /bin/bash -u ${USER_UID} ${USERNAME} && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/${USERNAME}
+
+# 设置用户密码
+RUN echo "${USERNAME}:${PASSWORD}" | chpasswd
+
+# 切换到用户
+USER ${USERNAME}
+
+# 设置工作目录
+WORKDIR /home/${USERNAME}
+
+# 设置环境变量
+ENV HOME=/home/${USERNAME}
+
+# 验证工具版本
+RUN echo "=== Build Environment Verification ===" && \
+    echo "GCC Version: $(gcc --version | head -1)" && \
+    echo "G++ Version: $(g++ --version | head -1)" && \
+    echo "Make Version: $(make --version | head -1)" && \
+    echo "Binutils Version: $(ld --version | head -1)" && \
+    echo "QEMU i386: $(qemu-system-i386 --version | head -1)" && \
+    echo "======================================"
+
+# 设置默认命令
+CMD ["/bin/bash"]
